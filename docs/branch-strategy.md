@@ -201,12 +201,12 @@ CI 는 프로젝트마다 다르므로 **레포에서 직접** 만듭니다. 대
 | `joojae-conventions` | 코드·주석·커밋·브랜치 규칙 상시 적용, AI 첨부 문구 차단, `/joojae-conventions:commit` · `:pr` · `:setup` |
 | `joojae-team` | PDCA(Plan→Design→Do→Check→Act) 작업 흐름 `/joojae-team:pdca`, 에이전트 팀, PROMPT.md |
 
-**org 레포에서만 켜집니다.** 플러그인은 PC 전역으로 설치하지 않고, 각 org 레포에 커밋된 `.claude/settings.json` 이 그 레포에서만 켭니다.
-개인 레포(예: field-note)는 지금까지의 설정(jbeat-conventions 등)이 그대로 적용되고 org 규칙은 들어가지 않습니다.
-혹시 실수로 켜져도 플러그인 훅은 origin 이 `github.com/JooJae-Lab/*` 인 레포에서만 동작합니다.
+**새 레포에 자동으로 들어가지 않습니다.** 레포 안에 `.claude/settings.json` 파일이 있어야 그 레포에서 플러그인이 켜집니다.
+이 파일은 아래 체크리스트 2번의 스크립트가 넣어줍니다. 그 뒤 레포를 Claude Code 로 열면 플러그인 설치 안내가 뜨고, 수락하면 끝입니다.
 
-- 레포를 처음 열면 Claude Code 가 플러그인 설치를 안내합니다 → 수락
-- 플러그인을 고치면 `/plugin marketplace update joojae-plugins` 로 갱신
+- PC 전체에 설치(`/plugin install`)하지 않습니다. 개인 레포(예: field-note)에는 org 규칙이 들어가면 안 되기 때문입니다
+- 혹시 켜져도 레포 주소가 `github.com/JooJae-Lab/...` 가 아니면 플러그인은 아무 동작도 하지 않습니다
+- 플러그인이 바뀌면 `/plugin marketplace update joojae-plugins` 로 갱신
 
 ### 새 레포 체크리스트
 
