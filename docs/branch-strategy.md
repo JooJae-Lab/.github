@@ -43,7 +43,9 @@ main ◀── release/v1.3.0 ◀── feature/v1.3.0 ◀── feat/login-page
 - `hotfix/*` 는 직접 push 가능 (force push 만 불가).
 - GitHub 은 PR 작성자가 자기 PR 을 승인할 수 없습니다. 그래서 `main` 으로 가는 PR 은 반드시 다른 사람이 리뷰합니다.
 - **Owner 만** 긴급 시 리뷰 없이 `main` 에 머지할 수 있습니다. (PR 화면의 "Merge without waiting for requirements to be met")
-- 머지된 브랜치는 자동 삭제됩니다. (`main`/`release`/`feature` 는 삭제 금지라 남습니다. 지난 버전 브랜치 정리는 Owner 가 합니다.)
+- Owner 우회는 `main` 에만 있습니다. `release`/`feature`/`hotfix` 룰은 Owner 도 똑같이 지켜야 합니다.
+- 머지된 작업 브랜치는 자동 삭제됩니다. `release/*`, `feature/*` 는 삭제 금지라 남습니다.
+  지난 버전 브랜치를 정리하려면 레포 **Settings → Rules → Rulesets** 에서 해당 룰을 잠시 `Disabled` 로 바꾸고 삭제한 뒤 다시 `Active` 로 돌려놓으세요.
 
 ## 4. 작업 흐름
 
@@ -87,7 +89,7 @@ git push -u origin hotfix/v1.2.1
 ```
 1. PR: `hotfix/v1.2.1` → `main`, 리뷰 1명 승인 후 **Create a merge commit**
 2. 태그 `v1.2.1` 릴리즈
-3. **백머지**: 머지 즉시 `main → feature/v*`, `main → release/v*` PR 이 자동으로 열립니다. **Create a merge commit** 으로 머지하세요.
+3. **백머지**: 머지 즉시 hotfix 보다 높은 버전(개발 중인 버전)의 `feature/v*`, `release/v*` 로 가는 `main → …` PR 이 자동으로 열립니다. **Create a merge commit** 으로 머지하세요.
 4. 로컬에서는 해당 브랜치에서 `git pull` 만 하면 됩니다. 작업 중인 `feat/*` 에도 반영하려면 `git merge origin/feature/v1.3.0`.
 
 ## 5. 백머지 (back-merge)

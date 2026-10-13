@@ -41,7 +41,14 @@ jobs:
             exit 0
           fi
 
+          hotfix_ver="${HOTFIX#hotfix/v}"
           for base in $branches; do
+            # hotfix 보다 높은 버전(아직 개발 중인 버전)에만 백머지한다. 이미 배포된 옛 브랜치는 건너뜀
+            base_ver="${base#*/v}"
+            if [[ "$(printf '%s\n%s\n' "$base_ver" "$hotfix_ver" | sort -V | tail -n1)" != "$base_ver" || "$base_ver" == "$hotfix_ver" ]]; then
+              echo "- ${base}: 지난 버전이라 건너뜀"
+              continue
+            fi
             ahead=$(gh api "repos/${REPO}/compare/${base}...${DEFAULT_BRANCH}" --jq .ahead_by)
             if [[ "$ahead" == "0" ]]; then
               echo "- ${base}: 이미 반영됨"

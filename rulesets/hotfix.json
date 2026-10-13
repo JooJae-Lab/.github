@@ -3,9 +3,7 @@
   "target": "branch",
   "enforcement": "active",
   "conditions": { "ref_name": { "include": ["refs/heads/hotfix/v*"], "exclude": [] } },
-  "bypass_actors": [
-    { "actor_id": 1, "actor_type": "OrganizationAdmin", "bypass_mode": "always" }
-  ],
+  "bypass_actors": [],
   "rules": [
     { "type": "non_fast_forward" }
   ]
