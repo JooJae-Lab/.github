@@ -1,0 +1,18 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "extraKnownMarketplaces": {
+    "joojae-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "JooJae-Lab/claude-plugins"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "joojae-conventions@joojae-plugins": true,
+    "joojae-team@joojae-plugins": true
+  }
+}

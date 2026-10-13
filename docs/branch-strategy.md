@@ -201,12 +201,17 @@ CI 는 프로젝트마다 다르므로 **레포에서 직접** 만듭니다. 대
 | `joojae-conventions` | 코드·주석·커밋·브랜치 규칙 상시 적용, AI 첨부 문구 차단, `/joojae-conventions:commit` · `:pr` · `:setup` |
 | `joojae-team` | PDCA(Plan→Design→Do→Check→Act) 작업 흐름 `/joojae-team:pdca`, 에이전트 팀, PROMPT.md |
 
-새 레포에서는 Claude Code 로 `/joojae-conventions:setup` 을 실행하면 `.claude/settings.json`(플러그인 자동 설치, AI 첨부 문구 끄기)과 CLAUDE.md 뼈대가 만들어집니다.
+**org 레포에서만 켜집니다.** 플러그인은 PC 전역으로 설치하지 않고, 각 org 레포에 커밋된 `.claude/settings.json` 이 그 레포에서만 켭니다.
+개인 레포(예: field-note)는 지금까지의 설정(jbeat-conventions 등)이 그대로 적용되고 org 규칙은 들어가지 않습니다.
+혹시 실수로 켜져도 플러그인 훅은 origin 이 `github.com/JooJae-Lab/*` 인 레포에서만 동작합니다.
+
+- 레포를 처음 열면 Claude Code 가 플러그인 설치를 안내합니다 → 수락
+- 플러그인을 고치면 `/plugin marketplace update joojae-plugins` 로 갱신
 
 ### 새 레포 체크리스트
 
-1. GitHub 에서 레포 생성 (public 권장, 기본 브랜치 `main`)
-2. Claude Code: `/joojae-conventions:setup` → `.claude/settings.json`, CLAUDE.md 등 커밋
-3. CI 추가 (`verify` 잡)
-4. `./scripts/apply-rules.ps1 -Repo <레포>` → 브랜치 룰 + PR 검사 + CI 필수 체크
+1. GitHub 에서 org 레포 생성 (public 권장, README 포함, 기본 브랜치 `main`)
+2. `./scripts/apply-rules.ps1 -Repo <레포> -FilesOnly` → PR 검사·백머지 워크플로와 `.claude/settings.json` 추가 (룰은 아직 안 걸림)
+3. clone 후 Claude Code 실행 → 플러그인 설치 안내 수락 → `/joojae-conventions:setup` (CLAUDE.md, .editorconfig 등) → 필요하면 CI(`verify` 잡) 작성 → `main` 에 커밋·push
+4. `./scripts/apply-rules.ps1 -Repo <레포>` → 브랜치 룰 + CI 필수 체크 적용 (이후 `main` 직접 push 불가)
 5. `feature/v0.1.0` 만들고 작업 시작

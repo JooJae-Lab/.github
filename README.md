@@ -10,6 +10,7 @@ org 공용 설정 레포입니다.
 | `.github/workflows/` | 공용 재사용 워크플로 (PR 규칙 검사, 자동 백머지) |
 | `templates/workflows/` | 각 레포에 들어가는 호출용 워크플로 (스크립트가 자동 추가) |
 | `templates/ci/ci.yml` | CI 템플릿 (최종 잡 이름 `verify`) |
+| `templates/claude/settings.json` | org 레포용 Claude Code 설정 (이 레포에서만 joojae 플러그인 활성화) |
 | `rulesets/` | 룰셋 정의 (main / release / feature / hotfix) |
 | `scripts/apply-rules.ps1` | 레포에 룰 적용 스크립트 |
 

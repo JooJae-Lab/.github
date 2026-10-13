@@ -8,6 +8,10 @@
   ./scripts/apply-rules.ps1 -Repo my-app -Rules hotfix -Remove    # 골라서 제거
   ./scripts/apply-rules.ps1 -All                                  # 모든 public 레포에 전체 적용
   ./scripts/apply-rules.ps1 -Repo my-app -Ci on                   # CI(verify) 필수 체크 강제 등록
+  ./scripts/apply-rules.ps1 -Repo my-app -FilesOnly               # 룰 없이 파일만 추가 (새 레포 초기 세팅 전)
+
+  추가 파일: .github/workflows/branch-policy.yml, auto-back-merge.yml,
+             .claude/settings.json (이 레포에서만 joojae 플러그인 활성화, AI 첨부 문구 끄기)
 
   CI 필수 체크 (-Ci): auto(기본) 는 레포 워크플로에 `verify` 잡이 있으면 main/release/feature 룰에 필수 체크로 등록
 
@@ -20,6 +24,7 @@ param(
   [string[]]$Rules = @('main', 'release', 'feature', 'hotfix'),
   [switch]$Remove,
   [switch]$SkipWorkflows,
+  [switch]$FilesOnly,
   [switch]$All,
   [ValidateSet('auto', 'on', 'off')]
   [string]$Ci = 'auto',
@@ -58,16 +63,20 @@ function Set-RepoSettings($full, $visibility) {
   Write-Host '  ✓ 머지 설정 (Merge/Squash 허용, Rebase 비활성, 머지 후 브랜치 자동 삭제)'
 }
 
-# 검사/백머지 워크플로를 기본 브랜치에 추가 (룰셋 적용 전에 해야 직접 커밋 가능)
+# 검사/백머지 워크플로와 Claude Code 레포 설정을 기본 브랜치에 추가 (룰셋 적용 전에 해야 직접 커밋 가능)
 function Add-Workflows($full) {
-  foreach ($file in Get-ChildItem "$root/templates/workflows" -Filter *.yml) {
-    $path = ".github/workflows/$($file.Name)"
+  $files = @(Get-ChildItem "$root/templates/workflows" -Filter *.yml | ForEach-Object {
+      @{ Source = $_; Path = ".github/workflows/$($_.Name)"; Message = "ci: $($_.BaseName) 워크플로 추가" } })
+  $files += @{ Source = Get-Item "$root/templates/claude/settings.json"; Path = '.claude/settings.json'; Message = 'chore: Claude Code 레포 설정 추가' }
+  foreach ($item in $files) {
+    $file = $item.Source
+    $path = $item.Path
     & gh api "repos/$full/contents/$path" --silent 2>$null
     if ($LASTEXITCODE -eq 0) { Write-Host "  - $path 이미 있음"; continue }
     $content = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))
     try {
       Invoke-Gh api -X PUT "repos/$full/contents/$path" `
-        -f "message=ci: add $($file.BaseName) workflow" -f "content=$content" | Out-Null
+        -f "message=$($item.Message)" -f "content=$content" | Out-Null
       Write-Host "  ✓ $path 추가"
     }
     catch {
@@ -143,6 +152,7 @@ foreach ($name in $targets) {
     Set-RepoSettings $full $info.visibility
     if (-not $SkipWorkflows) { Add-Workflows $full }
   }
+  if ($FilesOnly) { continue }
   $requireCi = $false
   if (-not $Remove) {
     $requireCi = switch ($Ci) { 'on' { $true } 'off' { $false } default { Test-CiVerifyJob $full } }
