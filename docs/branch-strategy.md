@@ -37,6 +37,7 @@ main ◀── release/v1.3.0 ◀── feature/v1.3.0 ◀── feat/login-page
 | `hotfix/vX.Y.Z` → `main` | **1명 이상 승인** (본인 제외) | **Merge commit** |
 | `main` → `feature/*`, `release/*` (백머지) | 필요 없음 | **Merge commit** (Squash 금지) |
 
+- 모든 PR 은 **`branch-policy / check`** 와 (CI 가 있는 레포는) **`verify`** 통과가 필수입니다. → [9. 커밋 컨벤션](#9-커밋pr-컨벤션), [10. CI](#10-ci)
 - 위 표 이외의 방향으로 PR 을 열면 `branch-policy / check` 가 실패하고 머지할 수 없습니다.
   - 잘못 연 PR 은 닫고 올바른 방향으로 다시 여세요. 검사 결과는 커밋 단위로 남기 때문에, 같은 브랜치로 연 올바른 PR 도 계속 막혀 있다면 커밋을 하나 더 push 하세요. (`git commit --allow-empty -m "chore: retrigger checks" && git push`)
 - `main`, `release/*`, `feature/*` 에는 **직접 push 불가** (PR 로만), **force push · 삭제 불가**.
@@ -130,18 +131,20 @@ cd joojae-github
 ./scripts/apply-rules.ps1 -Repo my-app -Rules main,feature     # 원하는 룰만 골라서 적용
 ./scripts/apply-rules.ps1 -Repo my-app -Rules hotfix -Remove   # 특정 룰 제거
 ./scripts/apply-rules.ps1 -All                                 # 모든 public 레포에 일괄 적용
+./scripts/apply-rules.ps1 -Repo my-app -Ci off                 # CI 필수 체크 빼고 적용 (기본 auto)
 ```
 
 스크립트가 하는 일:
 1. 머지 설정: Merge commit · Squash 허용, Rebase 비활성, 머지 후 브랜치 자동 삭제, (public) 비밀값 유출 차단
 2. `.github/workflows/branch-policy.yml`, `auto-back-merge.yml` 추가
 3. 선택한 룰셋 생성/업데이트
+4. 레포 워크플로에 `verify` 잡이 있으면 `main`·`release`·`feature` 룰에 필수 체크로 등록 (`-Ci auto`)
 
 | 룰 이름 | 대상 | 내용 |
 |---|---|---|
-| `main` | 기본 브랜치 | PR 필수, 승인 1명, Merge commit 만, 검사 통과 필수, force push·삭제 금지, Owner 우회 허용 |
-| `release` | `release/v*` | PR 필수, Merge commit 만, 검사 통과 필수, force push·삭제 금지 |
-| `feature` | `feature/v*` | PR 필수, Squash·Merge 허용, 검사 통과 필수, force push·삭제 금지 |
+| `main` | 기본 브랜치 | PR 필수, 승인 1명, Merge commit 만, `branch-policy / check`·`verify` 필수, force push·삭제 금지, Owner 우회 허용 |
+| `release` | `release/v*` | PR 필수, Merge commit 만, `branch-policy / check`·`verify` 필수, force push·삭제 금지 |
+| `feature` | `feature/v*` | PR 필수, Squash·Merge 허용, `branch-policy / check`·`verify` 필수, force push·삭제 금지 |
 | `hotfix` | `hotfix/v*` | force push 금지 (직접 push 는 허용) |
 
 레포별로 다르게 하고 싶으면 스크립트로 일부만 적용하거나, 레포 **Settings → Rules → Rulesets** 에서 직접 수정하세요.
@@ -152,3 +155,58 @@ cd joojae-github
 - `.env`, API 키, 토큰은 절대 커밋하지 않습니다. `.gitignore` 에 추가하세요.
 - CI 용 비밀값은 레포 **Settings → Secrets and variables → Actions** 에 저장합니다.
 - 실수로 올렸다면 커밋을 지워도 이미 노출된 것이므로 **즉시 키를 폐기하고 재발급**하세요.
+
+## 9. 커밋·PR 컨벤션
+
+```
+<타입>(<범위>): <한국어 설명> (<작업 ID>)
+```
+
+- 예: `feat: 로그인 화면 추가 (P1-3)`, `fix(auth): 세션 만료 시 무한 리다이렉트 수정`, `release: v1.2.0`
+- 타입: `feat` `fix` `refactor` `perf` `style` `docs` `test` `chore` `ci` `build` `revert` `release`
+- 설명은 한국어, 명사형 종결(`추가`, `구현`, `수정`), 마침표 없음
+- **PR 제목도 같은 형식**입니다. 작업 → feature 는 Squash 라 PR 제목이 그대로 커밋 메시지가 됩니다
+- PR 본문: `## 개요` / `## 변경 사항` / `## 검증` / `## 참고` (개조식)
+- **AI 첨부 문구 금지**: `Co-Authored-By: Claude …`, `Generated with [Claude Code]` 등 AI 도구 서명을 커밋·PR 에 넣지 않습니다
+
+`branch-policy / check` 가 PR 마다 검사하는 것:
+
+| 검사 | 실패 예 |
+|---|---|
+| PR 방향 | `feat/x` → `main` |
+| PR 제목 형식 | `Update stuff` |
+| PR 안의 모든 커밋 제목 형식 (GitHub 머지 커밋 `Merge …` 제외) | `update stuff` |
+| PR 본문·커밋의 AI 첨부 문구 | `Co-Authored-By: Claude …` |
+
+- 봇(dependabot 등)이 연 PR 은 제목·커밋 검사를 건너뜁니다
+- 커밋 메시지를 고치려면 `git commit --amend` 또는 `git rebase -i` 후 `git push --force-with-lease` (작업 브랜치에서만)
+- 상세 규칙: [joojae-conventions 커밋 규칙](https://github.com/JooJae-Lab/claude-plugins/blob/main/plugins/joojae-conventions/skills/conventions/references/commit.md)
+
+## 10. CI
+
+CI 는 프로젝트마다 다르므로 **레포에서 직접** 만듭니다. 대신 이름 규칙 하나만 지킵니다.
+
+- **최종 판정 잡 이름은 `verify`** — 다른 검사 잡들을 `needs` 로 모아서 하나라도 실패하면 실패
+- 템플릿: [`templates/ci/ci.yml`](../templates/ci/ci.yml) (Node/pnpm 예시, 스택에 맞게 수정)
+- CI 를 추가한 뒤 `./scripts/apply-rules.ps1 -Repo <레포>` 를 다시 실행하면 `verify` 가 필수 체크가 되어 **CI 실패 시 머지가 막힙니다**
+- CI 를 `main` 에 추가하면 진행 중인 `feature/*`·`release/*` 에도 반영(백머지)해야 그 브랜치 PR 에서 CI 가 돕니다. 반영 전에는 `verify` 가 오지 않아 머지가 막힙니다
+- 액션 버전은 정확한 버전으로 고정합니다 (`actions/checkout@v7.0.1`)
+
+## 11. Claude Code
+
+[JooJae-Lab/claude-plugins](https://github.com/JooJae-Lab/claude-plugins) 에 팀 공용 플러그인이 있습니다.
+
+| 플러그인 | 내용 |
+|---|---|
+| `joojae-conventions` | 코드·주석·커밋·브랜치 규칙 상시 적용, AI 첨부 문구 차단, `/joojae-conventions:commit` · `:pr` · `:setup` |
+| `joojae-team` | PDCA(Plan→Design→Do→Check→Act) 작업 흐름 `/joojae-team:pdca`, 에이전트 팀, PROMPT.md |
+
+새 레포에서는 Claude Code 로 `/joojae-conventions:setup` 을 실행하면 `.claude/settings.json`(플러그인 자동 설치, AI 첨부 문구 끄기)과 CLAUDE.md 뼈대가 만들어집니다.
+
+### 새 레포 체크리스트
+
+1. GitHub 에서 레포 생성 (public 권장, 기본 브랜치 `main`)
+2. Claude Code: `/joojae-conventions:setup` → `.claude/settings.json`, CLAUDE.md 등 커밋
+3. CI 추가 (`verify` 잡)
+4. `./scripts/apply-rules.ps1 -Repo <레포>` → 브랜치 룰 + PR 검사 + CI 필수 체크
+5. `feature/v0.1.0` 만들고 작업 시작
