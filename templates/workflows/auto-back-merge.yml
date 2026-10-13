@@ -1,0 +1,15 @@
+# hotfix 머지 후 백머지 PR 자동 생성 (JooJae-Lab/.github 의 공용 워크플로 호출)
+name: auto-back-merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  auto-back-merge:
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write
+    uses: JooJae-Lab/.github/.github/workflows/auto-back-merge.yml@main

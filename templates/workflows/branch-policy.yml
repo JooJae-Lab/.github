@@ -1,0 +1,10 @@
+# 브랜치 전략 검사 (JooJae-Lab/.github 의 공용 워크플로 호출)
+name: branch-policy
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  branch-policy:
+    uses: JooJae-Lab/.github/.github/workflows/branch-policy.yml@main
