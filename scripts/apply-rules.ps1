@@ -7,6 +7,9 @@
   ./scripts/apply-rules.ps1 -Repo my-app -Rules main,feature      # 골라서 적용
   ./scripts/apply-rules.ps1 -Repo my-app -Rules hotfix -Remove    # 골라서 제거
   ./scripts/apply-rules.ps1 -All                                  # 모든 public 레포에 전체 적용
+  ./scripts/apply-rules.ps1 -Repo my-app -Ci on                   # CI(verify) 필수 체크 강제 등록
+
+  CI 필수 체크 (-Ci): auto(기본) 는 레포 워크플로에 `verify` 잡이 있으면 main/release/feature 룰에 필수 체크로 등록
 
 .NOTES
   필요: GitHub CLI(gh) 로그인 + 레포 Admin 권한
@@ -18,6 +21,8 @@ param(
   [switch]$Remove,
   [switch]$SkipWorkflows,
   [switch]$All,
+  [ValidateSet('auto', 'on', 'off')]
+  [string]$Ci = 'auto',
   [string]$Org = 'JooJae-Lab'
 )
 
@@ -71,7 +76,31 @@ function Add-Workflows($full) {
   }
 }
 
-function Set-Rulesets($full) {
+# 레포 워크플로 중 `verify` 잡이 있는지 확인 (CI 최종 판정 잡 이름 규칙)
+function Test-CiVerifyJob($full) {
+  $files = @(& gh api "repos/$full/contents/.github/workflows" --jq '.[] | select(.name | test("\\.ya?ml$")) | .path' 2>$null)
+  if ($LASTEXITCODE -ne 0) { return $false }
+  foreach ($path in $files) {
+    $content = & gh api "repos/$full/contents/$path" -H 'Accept: application/vnd.github.raw' 2>$null
+    if (($content -join "`n") -match '(?m)^\s{2}verify:\s*$') { return $true }
+  }
+  return $false
+}
+
+# 룰셋 JSON 에 CI 필수 체크(verify) 추가한 임시 파일 경로 반환
+function Get-RulesetFile($name, $requireCi) {
+  $json = "$root/rulesets/$name.json"
+  if (-not $requireCi -or $name -eq 'hotfix') { return $json }
+  $ruleset = Get-Content $json -Raw | ConvertFrom-Json
+  $checks = ($ruleset.rules | Where-Object { $_.type -eq 'required_status_checks' }).parameters.required_status_checks
+  $checks += [pscustomobject]@{ context = 'verify' }
+  ($ruleset.rules | Where-Object { $_.type -eq 'required_status_checks' }).parameters.required_status_checks = $checks
+  $tmp = Join-Path ([IO.Path]::GetTempPath()) "ruleset-$name-$PID.json"
+  $ruleset | ConvertTo-Json -Depth 20 | Set-Content -Encoding utf8NoBOM $tmp
+  return $tmp
+}
+
+function Set-Rulesets($full, $requireCi) {
   $existing = @(Invoke-Gh api "repos/$full/rulesets?includes_parents=false" | ConvertFrom-Json)
   foreach ($name in $Rules) {
     $found = $existing | Where-Object { $_.name -eq $name -and $_.source_type -eq 'Repository' }
@@ -80,7 +109,7 @@ function Set-Rulesets($full) {
       else { Write-Host "  - 룰 '$name' 없음" }
       continue
     }
-    $json = "$root/rulesets/$name.json"
+    $json = Get-RulesetFile $name $requireCi
     try {
       if ($found) {
         Invoke-Gh api -X PUT "repos/$full/rulesets/$($found.id)" --input $json | Out-Null
@@ -114,6 +143,12 @@ foreach ($name in $targets) {
     Set-RepoSettings $full $info.visibility
     if (-not $SkipWorkflows) { Add-Workflows $full }
   }
-  Set-Rulesets $full
+  $requireCi = $false
+  if (-not $Remove) {
+    $requireCi = switch ($Ci) { 'on' { $true } 'off' { $false } default { Test-CiVerifyJob $full } }
+    if ($requireCi) { Write-Host '  ✓ CI 필수 체크 등록 (verify)' }
+    elseif ($Ci -eq 'auto') { Write-Host '  - CI(verify 잡) 없음 → 필수 체크 미등록. CI 를 만든 뒤 다시 실행하세요' }
+  }
+  Set-Rulesets $full $requireCi
 }
 Write-Host "`n완료"

@@ -1,4 +1,7 @@
-# 재사용 워크플로: PR의 출발(head) → 도착(base) 브랜치 조합이 브랜치 전략에 맞는지 검사한다.
+# 재사용 워크플로: PR 이 JooJae-Lab 규칙에 맞는지 검사한다.
+#  1) 출발(head) → 도착(base) 브랜치 조합
+#  2) PR 제목·커밋 메시지 형식 (`타입: 설명`)
+#  3) PR 본문·커밋의 AI 첨부 문구 (Co-Authored-By: Claude 등)
 # 각 레포의 .github/workflows/branch-policy.yml 이 이 파일을 호출한다.
 name: branch-policy
 
@@ -7,14 +10,21 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   check:
     name: check
     runs-on: ubuntu-latest
     steps:
-      - name: 브랜치 조합 검사
+      - name: PR 규칙 검사
         env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
           HEAD_REF: ${{ github.head_ref }}
           BASE_REF: ${{ github.base_ref }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
@@ -22,45 +32,71 @@ jobs:
         run: |
           VER='v[0-9]+\.[0-9]+\.[0-9]+'
           WORK='(feat|fix|refactor|chore|docs|test|style|perf|ci|build)/[A-Za-z0-9._/-]+'
+          TYPES='feat|fix|refactor|perf|style|docs|test|chore|ci|build|revert|release'
+          TITLE_RE="^(${TYPES})(\([A-Za-z0-9._/-]+\))?!?: .+"
+          AI_NAMES='claude|anthropic|chatgpt|openai|gpt-?[0-9]|copilot|cursor|gemini|codex'
+          AI_RE="co-authored-by:.*(${AI_NAMES})|noreply@anthropic\.com|generated (with|by) .{0,40}(${AI_NAMES})"
 
-          echo "PR: ${HEAD_REF} → ${BASE_REF}"
+          errors=()
+          echo "PR #${PR_NUMBER}: ${HEAD_REF} → ${BASE_REF}"
+          echo "제목: ${PR_TITLE}"
 
-          fail() {
-            echo "::error::$1"
+          # ── 1) 브랜치 조합 ──────────────────────────────
+          if [[ "$BASE_REF" == "$DEFAULT_BRANCH" ]]; then
+            [[ "$HEAD_REF" =~ ^(release|hotfix)/${VER}$ ]] \
+              || errors+=("${DEFAULT_BRANCH} 에는 release/vX.Y.Z 또는 hotfix/vX.Y.Z 만 PR 할 수 있습니다.")
+          elif [[ "$BASE_REF" == release/* ]]; then
+            if [[ ! "$BASE_REF" =~ ^release/${VER}$ ]]; then
+              errors+=("release 브랜치 이름은 release/vX.Y.Z 형식이어야 합니다. (현재: ${BASE_REF})")
+            else
+              version="${BASE_REF#release/}"
+              [[ "$HEAD_REF" == "feature/${version}" || "$HEAD_REF" == "$DEFAULT_BRANCH" ]] \
+                || errors+=("${BASE_REF} 에는 feature/${version} 또는 ${DEFAULT_BRANCH}(백머지) 만 PR 할 수 있습니다.")
+            fi
+          elif [[ "$BASE_REF" == feature/* ]]; then
+            if [[ ! "$BASE_REF" =~ ^feature/${VER}$ ]]; then
+              errors+=("feature 브랜치 이름은 feature/vX.Y.Z 형식이어야 합니다. (현재: ${BASE_REF})")
+            else
+              [[ "$HEAD_REF" =~ ^${WORK}$ || "$HEAD_REF" == "$DEFAULT_BRANCH" ]] \
+                || errors+=("${BASE_REF} 에는 작업 브랜치(feat/*, fix/* 등) 또는 ${DEFAULT_BRANCH}(백머지) 만 PR 할 수 있습니다.")
+            fi
+          fi
+
+          # ── 2) 제목·커밋 형식, 3) AI 첨부 문구 (봇 PR 은 제외) ──
+          if [[ "$PR_AUTHOR_TYPE" == "Bot" ]]; then
+            echo "봇 PR — 제목·커밋 검사 생략"
+          else
+            [[ "$PR_TITLE" =~ $TITLE_RE ]] \
+              || errors+=("PR 제목은 '타입: 설명' 형식이어야 합니다. (타입: ${TYPES//|/, }) 예: 'feat: 로그인 화면 추가'")
+
+            if printf '%s' "$PR_BODY" | grep -Eiq "$AI_RE"; then
+              errors+=("PR 본문에 AI 첨부 문구(Co-Authored-By: Claude, Generated with ... 등)가 있습니다. 지워주세요.")
+            fi
+
+            while IFS=$'\t' read -r sha encoded; do
+              [[ -z "$sha" ]] && continue
+              message="$(printf '%s' "$encoded" | base64 -d)"
+              subject="${message%%$'\n'*}"
+              # GitHub 이 만든 머지 커밋은 형식 검사 제외
+              if [[ ! "$subject" =~ ^Merge\  && ! "$subject" =~ $TITLE_RE ]]; then
+                errors+=("커밋 ${sha} 메시지가 '타입: 설명' 형식이 아닙니다: ${subject}")
+              fi
+              if printf '%s' "$message" | grep -Eiq "$AI_RE"; then
+                errors+=("커밋 ${sha} 에 AI 첨부 문구가 있습니다. (git commit --amend 또는 rebase 로 제거)")
+              fi
+            done < <(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/commits?per_page=100" \
+                      --jq '.[] | [.sha[0:7], (.commit.message | @base64)] | @tsv')
+          fi
+
+          if (( ${#errors[@]} > 0 )); then
+            for e in "${errors[@]}"; do echo "::error::$e"; done
             echo ""
             echo "허용되는 PR 방향"
             echo "  작업 브랜치(feat/*, fix/* ...) → feature/vX.Y.Z"
             echo "  feature/vX.Y.Z                → release/vX.Y.Z (같은 버전)"
             echo "  release/vX.Y.Z, hotfix/vX.Y.Z → ${DEFAULT_BRANCH}"
             echo "  ${DEFAULT_BRANCH} (백머지)            → feature/vX.Y.Z, release/vX.Y.Z"
+            echo "규칙: https://github.com/JooJae-Lab/.github/blob/main/docs/branch-strategy.md"
             exit 1
-          }
-
-          # 1) main 으로 가는 PR
-          if [[ "$BASE_REF" == "$DEFAULT_BRANCH" ]]; then
-            [[ "$HEAD_REF" =~ ^(release|hotfix)/${VER}$ ]] \
-              || fail "${DEFAULT_BRANCH} 에는 release/vX.Y.Z 또는 hotfix/vX.Y.Z 만 PR 할 수 있습니다."
-            echo "OK"; exit 0
           fi
-
-          # 2) release 브랜치로 가는 PR
-          if [[ "$BASE_REF" == release/* ]]; then
-            [[ "$BASE_REF" =~ ^release/${VER}$ ]] \
-              || fail "release 브랜치 이름은 release/vX.Y.Z 형식이어야 합니다. (현재: ${BASE_REF})"
-            version="${BASE_REF#release/}"
-            [[ "$HEAD_REF" == "feature/${version}" || "$HEAD_REF" == "$DEFAULT_BRANCH" ]] \
-              || fail "${BASE_REF} 에는 feature/${version} 또는 ${DEFAULT_BRANCH}(백머지) 만 PR 할 수 있습니다."
-            echo "OK"; exit 0
-          fi
-
-          # 3) feature 브랜치로 가는 PR
-          if [[ "$BASE_REF" == feature/* ]]; then
-            [[ "$BASE_REF" =~ ^feature/${VER}$ ]] \
-              || fail "feature 브랜치 이름은 feature/vX.Y.Z 형식이어야 합니다. (현재: ${BASE_REF})"
-            [[ "$HEAD_REF" =~ ^${WORK}$ || "$HEAD_REF" == "$DEFAULT_BRANCH" ]] \
-              || fail "${BASE_REF} 에는 작업 브랜치(feat/*, fix/* 등) 또는 ${DEFAULT_BRANCH}(백머지) 만 PR 할 수 있습니다."
-            echo "OK"; exit 0
-          fi
-
-          # 4) 그 외(작업 브랜치끼리 등)는 제한 없음
-          echo "OK (제한 없는 대상 브랜치)"
+          echo "OK"

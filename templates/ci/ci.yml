@@ -1,0 +1,62 @@
+# CI 템플릿 — 프로젝트에 맞게 잡을 고친다.
+# 규칙: 최종 판정 잡 이름은 반드시 `verify` (브랜치 룰의 필수 체크 이름)
+#       검사 잡을 늘리거나 줄이면 verify 의 needs 도 같이 고친다.
+#       액션 버전은 정확한 버전으로 고정한다.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 예시: Node(pnpm) 프로젝트. 다른 스택이면 setup 단계와 명령을 바꾼다
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm build
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+  # 필수 체크: 위 잡이 하나라도 실패·취소·생략되면 실패
+  verify:
+    needs: [static, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 검사 결과 판정
+        env:
+          FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+        run: |
+          echo "결과: ${{ toJSON(needs) }}" | head -c 2000
+          if [[ "$FAILED" == "true" ]]; then
+            echo "::error::실패한 검사가 있음"
+            exit 1
+          fi

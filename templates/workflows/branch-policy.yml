@@ -1,4 +1,4 @@
-# 브랜치 전략 검사 (JooJae-Lab/.github 의 공용 워크플로 호출)
+# PR 규칙 검사: 브랜치 방향, 제목·커밋 형식, AI 첨부 문구 (JooJae-Lab/.github 의 공용 워크플로 호출)
 name: branch-policy
 
 on:
@@ -7,4 +7,7 @@ on:
 
 jobs:
   branch-policy:
+    permissions:
+      contents: read
+      pull-requests: read
     uses: JooJae-Lab/.github/.github/workflows/branch-policy.yml@main
