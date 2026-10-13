@@ -8,9 +8,8 @@ name: branch-policy
 on:
   workflow_call:
 
-permissions:
-  contents: read
-  pull-requests: read
+# 권한은 호출하는 워크플로에서 받는다 (contents: read, pull-requests: read 권장)
+# 여기서 더 요구하면 권한을 주지 않은 기존 호출 워크플로가 시작조차 못 함
 
 jobs:
   check:
