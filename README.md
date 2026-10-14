@@ -1,4 +1,4 @@
-# JooJae-Lab/.github
+# JooJe-Lab/.github
 
 org 공용 설정 레포입니다.
 
