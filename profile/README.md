@@ -1,4 +1,4 @@
-# JooJae-Lab
+# JooJe-Lab
 
 > 주재 — 소리 내 읽으면 **주제**.🙂
 
